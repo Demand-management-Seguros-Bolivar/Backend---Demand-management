@@ -5,7 +5,7 @@ const getRadicadosByUser = async (req, res) => {
   try {
   
     
-    const radicados = await poService.getRadicadosByUser(req);
+    const radicados = await poService.getRadicadosByUser(req,res);
     res.status(200).json(radicados);
    
   } catch (error) {
@@ -17,9 +17,9 @@ const getRadicadosByUser = async (req, res) => {
 const getAnswerIa = async (req, res) => {
 
   try{
-
-    const answer_ia = await poService.getAnswerIa(req);
-    res.json(answer_ia)
+    
+    const answer_ia = await poService.getAnswerIa(req,res);
+    
 
   }catch(error){
      res.status(500).json({ error: "Error al obtener radicados del usuraio" });
@@ -41,7 +41,7 @@ async function createDraft(req, res) {
   try {
   
 
-    const docSnapshot = await poService.createDraft(req);
+    const docSnapshot = await poService.createDraft(req,res);
 
     res.status(200).json({ message: 'Draft creado con éxito.', docId: docSnapshot.id });
   } catch (error) {

@@ -10,7 +10,7 @@ const multer = require('multer'); // 1. Importa Multer
 // 2. Define la configuración de Multer
 const upload = multer({ dest: 'uploads/' });
 
-router.post("/analyzeIa",upload.single('documento_radicacion'), getAnswerIa );
+router.post("/analyzeIa",upload.single('data'), getAnswerIa );
 router.get("/getradicados",getRadicadosByUser );
 router.post("/radicados", upload.fields([
     { name: 'step2[cumplimiento_normativo]' },
