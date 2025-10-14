@@ -2,8 +2,10 @@
 const {db, bucket} = require('../firebase')
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
-const fs = require("fs/promises");
+const fs = require("fs");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
+const FormData = require("form-data");
 
 const {model, fileManager } = require('../ia_model')
 
@@ -53,9 +55,42 @@ const Book = {
 
     }catch(err){
       return res.status(401).json({succes:false, message:"Token invalido o expirado"});
-    }
-    
+    };
 
+    //N8N CALL
+    try{
+
+      const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook-test/b05b4186-4f64-41c1-9c57-47177b51a97f';
+      const filePath = req.file.path;
+      const fileName = req.file.originalname;
+
+      // Crea el formulario para enviar el archivo
+      const form = new FormData();
+      console.log(typeof req.file)
+      console.log(req.file)
+      form.append('file', fs.createReadStream(filePath), { filename: fileName });
+      form.append("name",fileName);
+      
+      // Aquí puedes añadir otros datos si lo necesitas
+
+      // Envía la solicitud a n8n
+      const response = await axios.post(n8nWebhookUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          // Incluye tu clave de autenticación si la configuraste
+          'API_KEY_N8N': process.env.SECRET_KEY_N8N 
+        }
+      });
+      console.log(response.data);
+      // Limpia el archivo temporal
+      fs.unlinkSync(filePath);
+
+      res.status(200).json({ 
+        message: 'Archivo enviado a n8n para procesamiento.', 
+        n8nResponse: response.data 
+      });
+    
+    /*
     const fileData = req.file;
  
      console.log(fileData);
@@ -82,8 +117,8 @@ const Book = {
     ]);
     console.log("jijijigggg");
 
-    console.log(result.response.text());
-    return result.response.text();
+    console.log(result.response.text());*/
+
   } catch (error) {
     console.error("Error al generar contenido con Gemini:", error);
     res.status(500).json({ success: false, message: "Error al procesar la solicitud con la IA.", details: error.message });
@@ -125,6 +160,7 @@ const Book = {
       const formData = req.body;
 
       const newDoc = await draftRef.add({
+        nombre_proyecto: formData.step1.name_project,
         correo:email,
         po: formData.step1.po,
         pot: formData.step1.pot,
@@ -152,13 +188,14 @@ const Book = {
         gastos_q2: formData.step2.gastos_q2,
         gastos_q3: formData.step2.gastos_q3,
         ingreso_q1: formData.step2.ingreso_q1,
-        ingreso_q2: formData.step2.gastos_q2,
-        ingreso_q3: formData.step2.gastos_q3,
+        ingreso_q2: formData.step2.ingreso_q2,
+        ingreso_q3: formData.step2.ingreso_q3,
+        estado: "En proceso",
         createdAt: new Date(),
       });
 
 
-
+s
       const filesData = req.files;
 
       // Si no hay archivos adjuntos, lanzamos un error.

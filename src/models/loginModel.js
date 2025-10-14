@@ -12,6 +12,7 @@ const {model, fileManager } = require('../ia_model')
 
 
 const login = {
+
   async logout(req, res) {
   try {
    Object.keys(req.cookies).forEach(cookieName => {
@@ -73,12 +74,21 @@ const login = {
       return res.status(403).json({ success: false, message: "Acceso restringido al dominio corporativo" });
     }
 
+    const email = payload.email;
+    
+  
+    // Looking for the drafts that have the id_user
+    const snapshot = await db.collection("users").where("correo", "==", email).get();
+    const user = snapshot.docs;
+
     // 3️⃣ Generar JWT interno
     const sessionToken = jwt.sign(
-      { email: payload.email, name: payload.name },
+      { email: payload.email, name: payload.name, role: user.role },
       process.env.SECRET_KEY,
       { expiresIn: "1h" }
     );
+
+
 
     // 4️⃣ Guardar cookie de sesión
     res.cookie("session", sessionToken, {
