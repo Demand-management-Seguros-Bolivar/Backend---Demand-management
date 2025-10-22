@@ -13,6 +13,57 @@ const {model, fileManager } = require('../ia_model')
 
 const login = {
 
+  async verificateRol(req, res) {
+     console.log(req)
+    const token = req.cookies.session;
+    console.log(token)
+
+    // 1. Check for token presence
+    if (!token) {
+      // 401: Unauthorized - no session token provided
+      return res.status(401).json({
+        authenticated: false,
+        message: "No session token provided."
+      });
+    }
+
+    let decoded; // Declare outside the try block so it's accessible later
+
+    try {
+      // 2. Token verification and decoding
+      // Correct method is likely 'verify' in most JWT libraries (e.g., jsonwebtoken)
+      // Also, fix the typo: 'PROCCESS' should be 'process'
+      decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+    } catch (error) {
+      // 3. Handle invalid or expired token
+      // 401: Unauthorized - token failed verification
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired token."
+      });
+    }
+
+    // 4. Role Authorization Check
+    // The logic should be to return 'rol: true' ONLY if the role matches, 
+    // and 'rol: false' (or a 403 Forbidden) if it does not.
+    console.log(decoded.rol)
+    console.log(decoded.rol)
+    if (decoded.role === 'PO') {
+      // Success: Role matches 'PO'
+      return res.json({
+        rol: true
+      });
+    } else {
+      // Failure: Role does NOT match 'PO'
+      // A 403 Forbidden status is generally more appropriate for authorization failures
+      return res.status(403).json({ // Changed status to 403
+        rol: false,
+        message: `Access denied. Required a specific role , but  no found .`
+      });
+    }
+  },
+
   async logout(req, res) {
     try {
     Object.keys(req.cookies).forEach(cookieName => {
@@ -42,8 +93,11 @@ const login = {
     
     try {
       const payload = jwt.verify(token, process.env.SECRET_KEY);
+      console.log("here 1")
+      console.log(payload.role)
+      console.log("here 2")
       
-      res.json({ authenticated: true, user: { email: payload.email, name: payload.name } });
+      res.json({ authenticated: true, user: { email: payload.email, name: payload.name, role: payload.role } });
     } catch(err) {
       res.status(401).json({ authenticated: false });
     }
@@ -80,10 +134,11 @@ const login = {
     // Looking for the drafts that have the id_user
     const snapshot = await db.collection("users").where("correo", "==", email).get();
     const user = snapshot.docs;
+    console.log(user)
 
     // 3Generar JWT interno
     const sessionToken = jwt.sign(
-      { email: payload.email, name: payload.name, role: user.role },
+      { email: payload.email, name: payload.name, role: user[0].data().role},
       process.env.SECRET_KEY,
       { expiresIn: "24h" }
     );

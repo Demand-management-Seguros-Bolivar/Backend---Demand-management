@@ -272,7 +272,7 @@ const Book = {
       createdAt: data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
     };
 
-    const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook-test/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
+    const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
 
     const response = await axios.post(
       n8nWebhookUrl,

@@ -1,6 +1,6 @@
 // src/routes/poRoutes.js
 const express = require("express");
-const { validateLogin, checkSession, logout } = require('../controllers/loginController');
+const { validateLogin, checkSession, logout, verificateRol } = require('../controllers/loginController');
 
 const router = express.Router();
 
@@ -13,6 +13,7 @@ const upload = multer({ dest: 'uploads/' });
 router.post("/validateLogin", validateLogin);
 router.get("/checkSession", checkSession);
 router.post("/logout", logout);
+router.post("/verificateRol", verificateRol);
 
 
 module.exports = router;
