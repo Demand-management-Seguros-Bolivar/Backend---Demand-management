@@ -124,9 +124,9 @@ const login = {
       return res.status(401).json({ success: false, message: "Correo no verificado" });
     }
 
-    if (!payload.email.endsWith("@segurosbolivar.com")) {
-      return res.status(403).json({ success: false, message: "Acceso restringido al dominio corporativo" });
-    }
+    //if (!payload.email.endsWith("@segurosbolivar.com")) {
+    //  return res.status(403).json({ success: false, message: "Acceso restringido al dominio corporativo" });
+   // }
 
     const email = payload.email;
     

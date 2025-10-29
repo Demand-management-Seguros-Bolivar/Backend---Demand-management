@@ -3,9 +3,9 @@ const poModel = require("../models/poModel");
 
 const poService = {
   getRadicadosByUser: (req,res) => poModel.getRadicadosByUser(req,res),
-  getRadicadoById: (id_radicado) => poModel. getRadicadoById(id_radicado),
+  getRadicadoById: (req,res) => poModel. getRadicadoById(req,res),
   createDraft: (req,res) => poModel.createDraft(req,res),
-  UpdateRadicadoById: (id_radicado) => poModel.UpdateRadicadoById(id_radicado),
+  UpdateRadicadoById: (req,res) => poModel.UpdateRadicadoById(req,res),
   getAnswerIa:(req,res) => poModel.getAnswerIa(req,res),
 };
 

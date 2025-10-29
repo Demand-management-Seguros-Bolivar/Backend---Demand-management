@@ -29,9 +29,10 @@ const getAnswerIa = async (req, res) => {
 
 const getRadicadoById = async (req, res) => {
   try {
-    const { id_radicado } = req.params;
-    const radicado = await poService.getRadicadoById(id_radicado);
-    res.json(radicado);
+  
+    
+    await poService.getRadicadoById(req,res);
+    
   } catch (error) {
     res.status(500).json({ error: "Error al obtener el radicado del usuario" });
   }
@@ -52,9 +53,9 @@ async function createDraft(req, res) {
 
 const UpdateRadicadoById= async (req, res) => {
   try {
-    const { id_radicado } = req.params;
-    const radicado = await poService.UpdateRadicadoById(id_radicado);
-    res.status(201).json(radicado);
+    
+    await poService.UpdateRadicadoById(req,res);
+   
   } catch (error) {
     res.status(500).json({ error: "Error al actualizar un radicado" });
   }

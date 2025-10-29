@@ -128,12 +128,20 @@ const Book = {
   },
 
 
-  async getRadicadoById(id_radicado) {
+  async getRadicadoById(req,res) {
 
     //Looking for the draft with a specific id
-    console.log(id_radicado)
-    const snapshot = await db.collection('draft').doc(id_radicado).get();
-    return snapshot;
+    const { id_draft} = req.body;
+    
+    const snapshot = await db.collection('draft').doc(id_draft ).get();
+    console.log(snapshot)
+
+    if(snapshot.data().estadoAjustesPendientes === "Activo"){
+      return res.json(snapshot);
+    }else{
+      return res.status(401).json({ success: false, message: "No se tiene permido para edicion de este radicado" });
+    }
+    
   },
 
   async createDraft(req,res) {
@@ -190,7 +198,12 @@ const Book = {
         ingreso_q1: formData.step2.ingreso_q1,
         ingreso_q2: formData.step2.ingreso_q2,
         ingreso_q3: formData.step2.ingreso_q3,
-        estado: "En proceso",
+        estado: "Creado",
+        estadoAjustesPendientes:"Desactivado",
+        aprovacionGD:[],
+        aprovacionGerentes:[],
+        aprovacionVices:[],
+        comentarios:[],
         createdAt: new Date(),
       });
 
@@ -209,7 +222,8 @@ const Book = {
       // Usamos 'map' para crear un array de promesas. Cada promesa representa la carga de un archivo.
       const uploadPromises = keys.map(async (key) => {
       const fileInfo = filesData[key][0];
-      const destinationPath = `${newDoc.id}'/${fileInfo.originalname}`;
+     const destinationPath = `${newDoc.id}/${fileInfo.fieldname}/${fileInfo.originalname}`;
+
 
       // Subimos el archivo a Firebase Storage.
       const [file] = await bucket.upload(fileInfo.path, {
@@ -293,16 +307,195 @@ const Book = {
   }
 },
 
-  async UpdateRadicadoById(id_radicado) {
-    const docRef = db.collection('draft').doc(id_radicado);
 
-    const dataToUpdate = {
-      architecture_containers: 'jejejejejejeje',
-      risk:"metoooi"
-    };
 
-    docRef.update(dataToUpdate);
+
+
+
+
+
+
+
+
+
+
+
+async UpdateRadicadoById(req, res) {
+
+  try {
+    const token = req.cookies.session;
+    if (!token) {
+      return res.status(401).json({ success: false, message: "No hay token de sesión" });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.SECRET_KEY);
+    } catch (err) {
+      return res.status(401).json({ success: false, message: "Token inválido o expirado" });
+    }
+
+    const { id_radicado } = req.params;
+    const formData = req.body;
+    const filesData = req.files;
+
+    const docRef = db.collection("draft").doc(id_radicado);
+    const docSnap = await docRef.get();
+    const infoDataCurrently = docSnap.data();
+
+    const email = decoded.email;
+    if (infoDataCurrently.correo !== email) {
+      return res.status(401).json({ success: false, message: "No propietario del radicado" });
+    }
+
+    // 🔹 Verificación de cambios en texto
+    let cambios = [];
+    const time = new Date();
+    let updates = {};
+
+    Object.keys(formData).forEach(key => {
+      Object.keys(formData[key]).forEach( keySec => {
+        if (infoDataCurrently.hasOwnProperty(keySec)) {
+          if (infoDataCurrently[keySec] != formData[key][keySec]) {
+            let paso = key === "step1" ? "Informacion general" : "Business Model Canvas";
+
+            cambios.push({
+              id: id_radicado,
+              time,
+              cambio: formData[key][keySec],
+              antiguo: infoDataCurrently[keySec],
+              paso
+            });
+
+            updates[keySec] = formData[key][keySec];
+            
+          }
+        }
+      });
+    });
+    updates["estadoAjustesPendientes"] = "Desactivado";
+    updates["estado"] = "Creado";
+
+    if(Object.keys(updates).length > 0){
+    
+      await docRef.update(updates)
+    }
+    
+
+    // ✅ Subida de archivos a Storage
+    const keys = Object.keys(filesData);
+    const uploadPromises = keys.map(async (key) => {
+      const fileInfo = filesData[key][0];
+      const destinationPath = `${id_radicado}/${fileInfo.fieldname}/${fileInfo.originalname}`;
+
+      const [file] = await bucket.upload(fileInfo.path, {
+        destination: destinationPath,
+        metadata: { contentType: fileInfo.mimetype },
+      });
+
+      const fileUrl = await file.getSignedUrl({
+        action: 'read',
+        expires: '03-09-2491',
+      });
+
+      return {
+        nombreOriginal: fileInfo.originalname,
+        nombreCampo: fileInfo.fieldname,
+        rutaBucket: file.name,
+        urlDescarga: fileUrl[0]
+      };
+    });
+
+    const uploadedFiles = await Promise.all(uploadPromises);
+
+    // ✅ Borrar archivos temporales
+    await Promise.all(
+      keys.map(async (key) => {
+        const fileInfo = filesData[key][0];
+        try {
+          await fs.promises.unlink(fileInfo.path);
+        } catch (err) {
+          console.error("Error borrando archivo:", fileInfo.path, err);
+        }
+      })
+    );
+
+    // ✅ Reemplazar/Agregar archivos en Firestore
+    let archivosActuales = infoDataCurrently.archivosAdjuntos || [];
+
+    uploadedFiles.forEach(nuevo => {
+      const index = archivosActuales.findIndex(a => a.nombreCampo === nuevo.nombreCampo);
+      if (index !== -1) {
+        cambios.push({
+                    id: id_radicado,
+                    time,
+                    cambio: nuevo.nombreOriginal,
+                    antiguo: archivosActuales[index].nombreOriginal,
+                    paso: valorPasoDocumentos(nuevo.nombreCampo)
+                  });
+
+        archivosActuales[index] = nuevo;
+       
+
+      } else {
+        archivosActuales.push(nuevo);
+        cambios.push({
+              time,
+              cambio: nuevo.nombreOriginal,
+              antiguo: "-",
+              paso: valorPasoDocumentos(nuevo.nombreCampo)
+            });
+      }
+    });
+
+    // ✅ Actualizar Firestore
+    await docRef.update({
+      archivosAdjuntos: archivosActuales,
+     
+    });
+
+    const draftRef = db.collection("history");
+
+    
+
+    cambios.forEach(async cambio =>{
+      console.log(cambio)
+      await draftRef.add(cambio)
+
+    });
+  
+
+    res.status(201).json({
+      success: true,
+      message: "Radicado actualizado correctamente",
+      archivosActuales,
+      cambios
+    });
+
+  } catch (err) {
+    console.error("ERROR EN UpdateRadicadoById:", err);
+    res.status(500).json({ success: false, message: "Error interno", error: err.message });
   }
+}
+
+
+
 };
+
+function valorPasoDocumentos(nombreCampo) {
+  return pasoDocumentos[nombreCampo] || "Documento";
+}
+
+const pasoDocumentos = {
+  "step2[cumplimiento_normativo]": "Cumplimiento Normativo",
+  "step2[finops]": "FinOps",
+  "step2[juridica]": "Jurídica",
+  "step2[seguridad_informacion]": "Seguridad información",
+  "step2[riesgo]": "Riesgo",
+  "step2[estimacion_detalle]": "Estimacion detalle",
+  "step2[caso_negocio]": "Caso de negocio"
+};
+
+
 
 module.exports = Book;

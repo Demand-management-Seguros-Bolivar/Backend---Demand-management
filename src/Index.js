@@ -1,6 +1,7 @@
 const express = require("express");
 const poRoutes = require("./routes/poRoutes");
 const loginRoutes = require("./routes/loginRoutes");
+const methodsRoutes = require("./routes/methodsRoutes");
 const morgan = require("morgan");
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
@@ -14,13 +15,16 @@ app.use(cookieParser()); // ✅ siempre antes de las rutas
 
 // 2️⃣ CORS configurado para permitir cookies
 app.use(cors({
-  origin: "http://localhost:4200", // Angular
+  origin: "http://localhost:4200", // Angular tener 8080en prod o 4200 en dev
   credentials: true,               // ✅ importante
   methods: "GET,POST,PUT,DELETE"
 }));
 
+
+
 // 3️⃣ Rutas
 app.use("/api", poRoutes);
 app.use("/api", loginRoutes);
+app.use("/api", methodsRoutes);
 
 module.exports = app;
