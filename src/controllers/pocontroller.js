@@ -1,12 +1,14 @@
 // src/controllers/poController.js
 const poService = require('../services/poService');
 
+
+
 const getRadicadosByUser = async (req, res) => {
   try {
   
     
-    const radicados = await poService.getRadicadosByUser(req,res);
-    res.status(200).json(radicados);
+    await poService.getRadicadosByUser(req,res);
+    
    
   } catch (error) {
     res.status(500).json({ error: "Error al obtener radicados del usuraio" });
@@ -27,11 +29,22 @@ const getAnswerIa = async (req, res) => {
   
 };
 
-const getRadicadoById = async (req, res) => {
+const getRadicadoByIdAjustes = async (req, res) => {
   try {
   
     
-    await poService.getRadicadoById(req,res);
+    await poService.getRadicadoByIdAjustes(req,res);
+    
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener el radicado del usuario" });
+  }
+};
+
+const getRadicadoByIdDetails = async (req, res) => {
+  try {
+  
+    
+    await poService.getRadicadoByIdDetails(req,res);
     
   } catch (error) {
     res.status(500).json({ error: "Error al obtener el radicado del usuario" });
@@ -41,12 +54,10 @@ const getRadicadoById = async (req, res) => {
 async function createDraft(req, res) {
   try {
   
-
     await poService.createDraft(req,res);
-
    
   } catch (error) {
-    console.error('Error en el controlador:', error);
+
     res.status(500).json({ message: 'Error interno del servidor.', error: error.message });
   }
 }
@@ -61,4 +72,4 @@ const UpdateRadicadoById= async (req, res) => {
   }
 };
 
-module.exports = { getRadicadoById, getRadicadosByUser, UpdateRadicadoById,createDraft, getAnswerIa };
+module.exports = { getRadicadoByIdAjustes, getRadicadosByUser, UpdateRadicadoById,createDraft, getAnswerIa, getRadicadoByIdDetails };

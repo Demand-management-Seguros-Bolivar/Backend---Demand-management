@@ -1,6 +1,6 @@
 // src/routes/poRoutes.js
 const express = require("express");
-const { getAnswerIa, getRadicadosByUser , getRadicadoById, createDraft, UpdateRadicadoById } = require('../controllers/pocontroller');
+const { getAnswerIa, getRadicadosByUser , getRadicadoByIdAjustes, createDraft, UpdateRadicadoById, getRadicadoByIdDetails } = require('../controllers/pocontroller');
 
 const router = express.Router();
 
@@ -11,9 +11,13 @@ const multer = require('multer'); // 1. Importa Multer
 const upload = multer({ dest: 'uploads/' });
 
 router.post("/analyzeIa",upload.single('data'), getAnswerIa );
+
 router.get("/getDrafts",getRadicadosByUser );
 
-router.post("/getDraft",getRadicadoById );
+
+router.post("/getDraft",getRadicadoByIdAjustes );
+
+router.post("/getDraftDetails",getRadicadoByIdDetails );
 
 router.post("/radicados", upload.fields([
     { name: 'step2[cumplimiento_normativo]' },

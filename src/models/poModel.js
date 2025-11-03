@@ -11,32 +11,35 @@ const {model, fileManager } = require('../ia_model')
 
 
 const Book = {
-  async getRadicadosByUser(req,res) {
-
+ async getRadicadosByUser(req, res) {
     const token = req.cookies.session;
-      if (!token) {
+    if (!token) {
         return res.status(401).json({ success: false, message: "No hay token de sesión" });
-      }
+    }
 
-    
-      let decoded;
-      try {
-        decoded = jwt.verify(token, process.env.SECRET_KEY);
-      } catch (err) {
+    let decoded;
+    try {
+        
+        decoded = jwt.verify(token, process.env.SECRET_KEY); 
+    } catch (err) {
         return res.status(401).json({ success: false, message: "Token inválido o expirado" });
-      }
+    }
 
+    const email = decoded.email;
     
-      const email = decoded.email;
-    
-  
-    
-
-    // Looking for the drafts that have the id_user
     const snapshot = await db.collection("draft").where("correo", "==", email).get();
-    console.log(snapshot.docs)
-    return snapshot.docs;
-  },
+
+    const drafts = snapshot.docs.map(doc => ({
+        id: doc.id, 
+        ...doc.data()
+    }));
+
+    return res.status(200).json({
+        success: true,
+        data: drafts 
+    });
+},
+  
 
   async getAnswerIa(req,res) {
 
@@ -66,8 +69,7 @@ const Book = {
 
       // Crea el formulario para enviar el archivo
       const form = new FormData();
-      console.log(typeof req.file)
-      console.log(req.file)
+      
       form.append('file', fs.createReadStream(filePath), { filename: fileName });
       form.append("name",fileName);
       
@@ -128,7 +130,7 @@ const Book = {
   },
 
 
-  async getRadicadoById(req,res) {
+  async getRadicadoByIdAjustes(req,res) {
 
     //Looking for the draft with a specific id
     const { id_draft} = req.body;
@@ -144,168 +146,256 @@ const Book = {
     
   },
 
-  async createDraft(req,res) {
-    try {
+  async getRadicadoByIdDetails(req, res) {
     
-      const token = req.cookies.session;
-      if (!token) {
+    const  data  = req.body; 
+    console.log(req.body)
+
+    
+    const token = req.cookies.session;
+
+    if (!token) {
         return res.status(401).json({ success: false, message: "No hay token de sesión" });
-      }
+    }
 
-    
-      let decoded;
-      try {
+    let decoded;
+    try {
         decoded = jwt.verify(token, process.env.SECRET_KEY);
-      } catch (err) {
+    } catch (err) {
         return res.status(401).json({ success: false, message: "Token inválido o expirado" });
-      }
+    }
+    // ------------------------------------
 
-    
-      const email = decoded.email;
-   
-    
-      const draftRef = db.collection("draft");
-      const formData = req.body;
-
-      const newDoc = await draftRef.add({
-        nombre_proyecto: formData.step1.name_project,
-        correo:email,
-        po: formData.step1.po,
-        pot: formData.step1.pot,
-        vp_sponsor: formData.step1.vp_sponsor,
-        lider_negocio: formData.step1.lider_negocio,
-        tribu: formData.step1.tribu,
-        squad: formData.step1.squad,
-        aliados_q1: formData.step2.aliados_q1,
-        aliados_q2: formData.step2.aliados_q2,
-        aliados_q3: formData.step2.aliados_q3,
-        actividades_q1: formData.step2.actividades_q1,
-        actividades_q2: formData.step2.actividades_q2,
-        propuesta_q1: formData.step2.propuesta_q1,
-        propuesta_q2: formData.step2.propuesta_q2,
-        propuesta_q3: formData.step2.propuesta_q3,
-        relacion_q1: formData.step2.relacion_q1,
-        relacion_q2: formData.step2.relacion_q2,
-        recursos_q1: formData.step2.recursos_q1,
-        canales_q1: formData.step2.canales_q1,
-        canales_q2: formData.step2.canales_q2,
-        segmentos_q1: formData.step2.segmentos_q1,
-        segmentos_q2: formData.step2.segmentos_q2,
-        segmentos_q3: formData.step2.segmentos_q3,
-        gastos_q1: formData.step2.gastos_q1,
-        gastos_q2: formData.step2.gastos_q2,
-        gastos_q3: formData.step2.gastos_q3,
-        ingreso_q1: formData.step2.ingreso_q1,
-        ingreso_q2: formData.step2.ingreso_q2,
-        ingreso_q3: formData.step2.ingreso_q3,
-        estado: "Creado",
-        estadoAjustesPendientes:"Desactivado",
-        aprovacionGD:[],
-        aprovacionGerentes:[],
-        aprovacionVices:[],
-        comentarios:[],
-        createdAt: new Date(),
-      });
-
-
-
-      const filesData = req.files;
-
-      // Si no hay archivos adjuntos, lanzamos un error.
-      if (!filesData || Object.keys(filesData).length === 0) {
-        throw new Error("No se ha adjuntado ningún archivo.");
-      }
-      
-      const keys = Object.keys(filesData);
-
-
-      // Usamos 'map' para crear un array de promesas. Cada promesa representa la carga de un archivo.
-      const uploadPromises = keys.map(async (key) => {
-      const fileInfo = filesData[key][0];
-     const destinationPath = `${newDoc.id}/${fileInfo.fieldname}/${fileInfo.originalname}`;
-
-
-      // Subimos el archivo a Firebase Storage.
-      const [file] = await bucket.upload(fileInfo.path, {
-        destination: destinationPath,
-        metadata: {
-          contentType: fileInfo.mimetype,
-        },
-      });
-
-
-      // Obtenemos la URL de descarga del archivo.
-      const fileUrl = await file.getSignedUrl({
-        action: 'read',
-        expires: '03-09-2491',
-      });
-
-      // Devolvemos un objeto con la información del archivo para que 'Promise.all' lo recoja.
-      return {
-        nombreOriginal: fileInfo.originalname,
-        nombreCampo: fileInfo.fieldname,
-        rutaBucket: file.name,
-        urlDescarga: fileUrl[0]
-      };
-    });
-
-    // 'Promise.all' espera a que todas las promesas de carga se resuelvan.
-    const uploadedFiles = await Promise.all(uploadPromises);
-
-
-
-    await Promise.all(
-    keys.map(async (key) => {
-        const fileInfo = filesData[key][0];
-        try {
-          await fs.promises.unlink(fileInfo.path); // borra cada archivo temporal
-        } catch (err) {
-          console.error("Error borrando archivo:", fileInfo.path, err);
+    // 2. Lógica de Base de Datos con Try/Catch
+    try {
+        console.log(req.body)
+        
+        // C. Acceder directamente al documento
+        const snapshot = await db.collection('draft').doc(data.id_draft).get();
+        
+        // Verificar si el documento existe
+        if (!snapshot.exists) {
+            return res.status(404).json({ success: false, message: "Borrador no encontrado" });
         }
-      })
-    );
+        
+        // 3. Verificación de Autorización (¡La parte clave de la seguridad!)
+        const draftData = snapshot.data();
 
-    const id_radicado = newDoc.id;
+        //if (decoded.role !== "METHODS" || decoded.role !== "PO") {
+            // Documento existe, pero no pertenece a este usuario
+         //   return res.status(403).json({ success: false, message: "Acceso denegado. No tienes permisos para ver este borrador." });
+        //}
 
-    const docRef = db.collection('draft').doc(id_radicado);
+        if(decoded.role === "PO"){
+          if(draftData.correo !== decoded.email){
+             return res.status(403).json({ success: false, message: "Acceso denegado. No tienes permisos para ver este borrador." });
+          }else{
+             draftData["id"] = snapshot.id;
+              // 4. Respuesta de éxito
+              return res.status(200).json({
+                  success: true,
+                  id: snapshot.id,
+                  data: draftData
+              });
 
-      const dataToUpdate = {
-        archivosAdjuntos: uploadedFiles
-      };
+          }
+        }else{
 
-      docRef.update(dataToUpdate);
+          draftData["id"] = snapshot.id;
+        
+          return res.status(200).json({
+                  success: true,
+                  id: snapshot.id,
+                  data: draftData
+           });
 
-    
-
-    const docSnapshot = await newDoc.get();
-    const data = docSnapshot.data();
-
-    const dataToSend = {
-      id_radicado: newDoc.id,
-      ...data,
-      createdAt: data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
-    };
-
-    const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
-
-    const response = await axios.post(
-      n8nWebhookUrl,
-      dataToSend,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'API_KEY_N8N': process.env.SECRET_KEY_N8N
         }
-      }
-    );
+        
+        
 
-     res.status(200).json({ message: 'Draft creado con éxito.', docId: docSnapshot.id });
-
-  } catch (error) {
-    console.error("Error en createDraft:", error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
+    } catch (dbErr) {
+        console.error("Error al buscar borrador:", dbErr);
+        return res.status(500).json({ success: false, message: "Error interno del servidor al buscar el borrador." });
+    }
 },
+
+  async createDraft(req, res) {
+    try {
+       
+        const token = req.cookies.session;
+        if (!token) {
+            return res.status(401).json({ success: false, message: "No hay token de sesión" });
+        }
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.SECRET_KEY);
+        } catch (err) {
+            return res.status(401).json({ success: false, message: "Token inválido o expirado" });
+        }
+        const email = decoded.email;
+        
+  
+        const draftRef = db.collection("draft");
+        const formData = req.body;
+        const filesData = req.files;
+        let uploadedFiles = [];
+        
+      
+        const initialDraftData = {
+            nombre_proyecto: formData.step1.name_project,
+            correo: email,
+            po: formData.step1.po,
+            pot: formData.step1.pot,
+            vp_sponsor: formData.step1.vp_sponsor,
+            lider_negocio: formData.step1.lider_negocio,
+            tribu: formData.step1.tribu,
+            squad: formData.step1.squad,
+            aliados_q1: formData.step2.aliados_q1,
+            aliados_q2: formData.step2.aliados_q2,
+            aliados_q3: formData.step2.aliados_q3,
+            actividades_q1: formData.step2.actividades_q1,
+            actividades_q2: formData.step2.actividades_q2,
+            propuesta_q1: formData.step2.propuesta_q1,
+            propuesta_q2: formData.step2.propuesta_q2,
+            propuesta_q3: formData.step2.propuesta_q3,
+            relacion_q1: formData.step2.relacion_q1,
+            relacion_q2: formData.step2.relacion_q2,
+            recursos_q1: formData.step2.recursos_q1,
+            canales_q1: formData.step2.canales_q1,
+            canales_q2: formData.step2.canales_q2,
+            segmentos_q1: formData.step2.segmentos_q1,
+            segmentos_q2: formData.step2.segmentos_q2,
+            segmentos_q3: formData.step2.segmentos_q3,
+            gastos_q1: formData.step2.gastos_q1,
+            gastos_q2: formData.step2.gastos_q2,
+            gastos_q3: formData.step2.gastos_q3,
+            ingreso_q1: formData.step2.ingreso_q1,
+            ingreso_q2: formData.step2.ingreso_q2,
+            ingreso_q3: formData.step2.ingreso_q3,
+            estado: "Creado",
+            estadoAjustesPendientes: "Desactivado",
+            archivosAdjuntos: [],
+            aprovacionGD: [],
+            aprovacionGerentes: [],
+            aprovacionVices: [],
+            comentarios: [],
+            createdAt: new Date(),
+            whoSendCompleteAjuste: ''
+        };
+
+       
+        const newDocRef = await draftRef.add(initialDraftData);
+
+        const id_radicado = newDocRef.id;
+        
+   
+        const keys = filesData ? Object.keys(filesData) : [];
+
+        if (keys.length > 0) {
+           
+            let uploadPromises = keys.map(async (key) => {
+               
+                const fileInfo = filesData[key][0]; 
+                const destinationPath = `${id_radicado}/${fileInfo.fieldname}/${fileInfo.originalname}`;
+
+                const [file] = await bucket.upload(fileInfo.path, {
+                    destination: destinationPath,
+                    metadata: {
+                        contentType: fileInfo.mimetype,
+                    },
+                });
+
+                
+                const [fileUrl] = await file.getSignedUrl({ 
+                    action: 'read',
+                    expires: '03-09-2491', 
+                });
+
+          
+                return {
+                    nombreOriginal: fileInfo.originalname,
+                    nombreCampo: fileInfo.fieldname,
+                    rutaBucket: file.name,
+                    urlDescarga: fileUrl
+                };
+            });
+
+            
+            uploadedFiles = await Promise.all(uploadPromises);
+
+           
+            await newDocRef.update({
+                archivosAdjuntos: uploadedFiles
+            });
+
+        } else if (filesData && Object.keys(filesData).length === 0) {
+            
+            console.log("No se adjuntaron archivos para este borrador.");
+        }
+        
+       
+        await Promise.all(
+            keys.map(async (key) => {
+                const fileInfo = filesData[key][0];
+                try {
+                    await fs.promises.unlink(fileInfo.path); // borra cada archivo temporal
+                } catch (err) {
+                    console.error("Error borrando archivo temporal:", fileInfo.path, err.message);
+                    
+                }
+            })
+        );
+        
+       
+        const docSnapshot = await newDocRef.get();
+        const data = docSnapshot.data();
+         const usersRef = await db.collection("users").where("role", "==", "METHODS").get();
+
+
+        const listUsers = usersRef.docs.map(doc => doc.data());
+
+
+        const whoSend = listUsers.map(user => ({
+          correo: user.correo
+        }));
+        
+      
+        const dataToSend = {
+            id_radicado: docSnapshot.id,
+            whosend: whoSend,
+            ...data,
+            createdAt: data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
+        };
+
+        const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
+
+        
+        console.log(whoSend)
+      
+        const response = await axios.post(
+            n8nWebhookUrl,
+            dataToSend,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'API_KEY_N8N': process.env.SECRET_KEY_N8N,
+                    'motivo': 'Creacion'
+                }
+            }
+        );
+
+  
+        res.status(200).json({ message: 'Draft creado con éxito.', docId: docSnapshot.id, webhookStatus: response.status });
+
+    } catch (error) {
+      
+        console.error("Error en createDraft:", error);
+        // Si el error es de la subida, es mejor un 500
+        return res.status(500).json({ success: false, message: `Error al crear el Draft: ${error.message}` });
+    }
+},
+
 
 
 
@@ -440,6 +530,7 @@ async UpdateRadicadoById(req, res) {
       } else {
         archivosActuales.push(nuevo);
         cambios.push({
+              id: id_radicado,
               time,
               cambio: nuevo.nombreOriginal,
               antiguo: "-",
@@ -448,9 +539,12 @@ async UpdateRadicadoById(req, res) {
       }
     });
 
+
+
     // ✅ Actualizar Firestore
     await docRef.update({
       archivosAdjuntos: archivosActuales,
+      whoSendCompleteAjuste:''
      
     });
 
@@ -463,6 +557,22 @@ async UpdateRadicadoById(req, res) {
       await draftRef.add(cambio)
 
     });
+
+     const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
+                
+    const response = await axios.post(
+      n8nWebhookUrl,
+      cambios,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'API_KEY_N8N': process.env.SECRET_KEY_N8N,
+          'motivo':'AjustesComplete',
+          'whoSend':infoDataCurrently.aprovacionGD[0].gmailSender,
+          'id_radicado':id_radicado
+        }
+      }
+    );
   
 
     res.status(201).json({
