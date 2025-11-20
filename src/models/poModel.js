@@ -138,7 +138,7 @@ const Book = {
     const snapshot = await db.collection('draft').doc(id_draft ).get();
     console.log(snapshot)
 
-    if(snapshot.data().estadoAjustesPendientes === "Activo"){
+    if(snapshot.data().estadoAjustesPendientes === "Gerentes" || snapshot.data().estadoAjustesPendientes === "GD"){
       return res.json(snapshot);
     }else{
       return res.status(401).json({ success: false, message: "No se tiene permido para edicion de este radicado" });
@@ -172,6 +172,7 @@ const Book = {
         
         // C. Acceder directamente al documento
         const snapshot = await db.collection('draft').doc(data.id_draft).get();
+        const snapshot2 = await db.collection('history').where("id","==",data.id_draft).get();
         
         // Verificar si el documento existe
         if (!snapshot.exists) {
@@ -180,6 +181,7 @@ const Book = {
         
         // 3. Verificación de Autorización (¡La parte clave de la seguridad!)
         const draftData = snapshot.data();
+        const historyChangesData = snapshot2.docs.map(doc => doc.data());
 
         //if (decoded.role !== "METHODS" || decoded.role !== "PO") {
             // Documento existe, pero no pertenece a este usuario
@@ -195,7 +197,8 @@ const Book = {
               return res.status(200).json({
                   success: true,
                   id: snapshot.id,
-                  data: draftData
+                  data: draftData,
+                  history: historyChangesData
               });
 
           }
@@ -206,7 +209,8 @@ const Book = {
           return res.status(200).json({
                   success: true,
                   id: snapshot.id,
-                  data: draftData
+                  data: draftData,
+                  history: historyChangesData
            });
 
         }
@@ -217,31 +221,33 @@ const Book = {
         console.error("Error al buscar borrador:", dbErr);
         return res.status(500).json({ success: false, message: "Error interno del servidor al buscar el borrador." });
     }
-},
+  },
 
   async createDraft(req, res) {
     try {
        
         const token = req.cookies.session;
+
         if (!token) {
             return res.status(401).json({ success: false, message: "No hay token de sesión" });
         }
 
         let decoded;
+
         try {
             decoded = jwt.verify(token, process.env.SECRET_KEY);
         } catch (err) {
             return res.status(401).json({ success: false, message: "Token inválido o expirado" });
         }
+
         const email = decoded.email;
         
-  
-        const draftRef = db.collection("draft");
         const formData = req.body;
         const filesData = req.files;
         let uploadedFiles = [];
         
-      
+        const draftRef = db.collection("draft");
+
         const initialDraftData = {
             nombre_proyecto: formData.step1.name_project,
             correo: email,
@@ -273,23 +279,19 @@ const Book = {
             ingreso_q1: formData.step2.ingreso_q1,
             ingreso_q2: formData.step2.ingreso_q2,
             ingreso_q3: formData.step2.ingreso_q3,
-            estado: "Creado",
+            estado: "Radicado",
             estadoAjustesPendientes: "Desactivado",
             archivosAdjuntos: [],
             aprovacionGD: [],
             aprovacionGerentes: [],
             aprovacionVices: [],
             comentarios: [],
-            createdAt: new Date(),
-            whoSendCompleteAjuste: ''
+            createdAt: new Date()
         };
 
-       
         const newDocRef = await draftRef.add(initialDraftData);
 
         const id_radicado = newDocRef.id;
-        
-   
         const keys = filesData ? Object.keys(filesData) : [];
 
         if (keys.length > 0) {
@@ -330,7 +332,6 @@ const Book = {
             });
 
         } else if (filesData && Object.keys(filesData).length === 0) {
-            
             console.log("No se adjuntaron archivos para este borrador.");
         }
         
@@ -339,7 +340,7 @@ const Book = {
             keys.map(async (key) => {
                 const fileInfo = filesData[key][0];
                 try {
-                    await fs.promises.unlink(fileInfo.path); // borra cada archivo temporal
+                    await fs.promises.unlink(fileInfo.path); 
                 } catch (err) {
                     console.error("Error borrando archivo temporal:", fileInfo.path, err.message);
                     
@@ -349,8 +350,9 @@ const Book = {
         
        
         const docSnapshot = await newDocRef.get();
-        const data = docSnapshot.data();
-         const usersRef = await db.collection("users").where("role", "==", "METHODS").get();
+        const dataDraft = docSnapshot.data();
+        
+        const usersRef = await db.collection("users").where("role", "==", "METHODS").get();
 
 
         const listUsers = usersRef.docs.map(doc => doc.data());
@@ -359,13 +361,15 @@ const Book = {
         const whoSend = listUsers.map(user => ({
           correo: user.correo
         }));
+
+        whoSend.push({correo:email})
         
       
         const dataToSend = {
             id_radicado: docSnapshot.id,
             whosend: whoSend,
-            ...data,
-            createdAt: data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
+            ...dataDraft,
+            createdAt: dataDraft.createdAt.toDate ? dataDraft.createdAt.toDate().toISOString() : dataDraft.createdAt
         };
 
         const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
@@ -394,203 +398,215 @@ const Book = {
         // Si el error es de la subida, es mejor un 500
         return res.status(500).json({ success: false, message: `Error al crear el Draft: ${error.message}` });
     }
-},
+  },
 
 
+  async UpdateRadicadoById(req, res) {
 
-
-
-
-
-
-
-
-
-
-
-
-
-async UpdateRadicadoById(req, res) {
-
-  try {
-    const token = req.cookies.session;
-    if (!token) {
-      return res.status(401).json({ success: false, message: "No hay token de sesión" });
-    }
-
-    let decoded;
     try {
-      decoded = jwt.verify(token, process.env.SECRET_KEY);
-    } catch (err) {
-      return res.status(401).json({ success: false, message: "Token inválido o expirado" });
-    }
+      const token = req.cookies.session;
 
-    const { id_radicado } = req.params;
-    const formData = req.body;
-    const filesData = req.files;
+      if (!token) {
+        return res.status(401).json({ success: false, message: "No hay token de sesión" });
+      }
 
-    const docRef = db.collection("draft").doc(id_radicado);
-    const docSnap = await docRef.get();
-    const infoDataCurrently = docSnap.data();
+      let decoded;
 
-    const email = decoded.email;
-    if (infoDataCurrently.correo !== email) {
-      return res.status(401).json({ success: false, message: "No propietario del radicado" });
-    }
+      try {
+        decoded = jwt.verify(token, process.env.SECRET_KEY);
+      } catch (err) {
+        return res.status(401).json({ success: false, message: "Token inválido o expirado" });
+      }
 
-    // 🔹 Verificación de cambios en texto
-    let cambios = [];
-    const time = new Date();
-    let updates = {};
+      const { id_radicado } = req.params;
 
-    Object.keys(formData).forEach(key => {
-      Object.keys(formData[key]).forEach( keySec => {
-        if (infoDataCurrently.hasOwnProperty(keySec)) {
-          if (infoDataCurrently[keySec] != formData[key][keySec]) {
-            let paso = key === "step1" ? "Informacion general" : "Business Model Canvas";
+      const formData = req.body;
+      const filesData = req.files;
 
-            cambios.push({
-              id: id_radicado,
-              time,
-              cambio: formData[key][keySec],
-              antiguo: infoDataCurrently[keySec],
-              paso
-            });
+      const docRef = db.collection("draft").doc(id_radicado);
+      const docSnap = await docRef.get();
+      const infoDataCurrently = docSnap.data();
 
-            updates[keySec] = formData[key][keySec];
-            
+      const email = decoded.email;
+
+      if (infoDataCurrently.correo !== email) {
+        return res.status(401).json({ success: false, message: "No propietario del radicado" });
+      }
+
+      
+      let cambios = [];
+      const time = new Date();
+      let updates = {};
+
+      Object.keys(formData).forEach(key => {
+        Object.keys(formData[key]).forEach( keySec => {
+          if (infoDataCurrently.hasOwnProperty(keySec)) {
+            if (infoDataCurrently[keySec] != formData[key][keySec]) {
+              let paso = key === "step1" ? "Informacion general" : "Business Model Canvas";
+
+              cambios.push({
+                id: id_radicado,
+                time,
+                cambio: formData[key][keySec],
+                antiguo: infoDataCurrently[keySec],
+                paso
+              });
+
+              updates[keySec] = formData[key][keySec];
+              
+            }
+          }
+        });
+      });
+
+      updates.estadoAjustesPendientes = "Desactivado";
+      
+
+      if(Object.keys(updates).length > 0){
+
+        if(infoDataCurrently.estadoAjustesPendientes == "Gerentes"){
+          updates.estado = "En revision";
+
+          const gerentes = Array.isArray(infoDataCurrently.aprovacionGerentes)
+          ? [... infoDataCurrently.aprovacionGerentes]
+          : [];
+
+          gerentes.forEach( gerente =>{
+              
+            if(gerente.estado === "Pendiente de ajustes")
+              gerente.estado = "En revision"
+          });
+
+          updates.aprovacionGerentes = gerentes;
+
+        }else{
+          updates.estado = "Creado";
+        }
+      
+        await docRef.update(updates)
+      }
+      
+
+      
+      const keys = Object.keys(filesData);
+      const uploadPromises = keys.map(async (key) => {
+        const fileInfo = filesData[key][0];
+        const destinationPath = `${id_radicado}/${fileInfo.fieldname}/${fileInfo.originalname}`;
+
+        const [file] = await bucket.upload(fileInfo.path, {
+          destination: destinationPath,
+          metadata: { contentType: fileInfo.mimetype },
+        });
+
+        const fileUrl = await file.getSignedUrl({
+          action: 'read',
+          expires: '03-09-2491',
+        });
+
+        return {
+          nombreOriginal: fileInfo.originalname,
+          nombreCampo: fileInfo.fieldname,
+          rutaBucket: file.name,
+          urlDescarga: fileUrl[0]
+        };
+      });
+
+      const uploadedFiles = await Promise.all(uploadPromises);
+
+      
+      await Promise.all(
+        keys.map(async (key) => {
+          const fileInfo = filesData[key][0];
+          try {
+            await fs.promises.unlink(fileInfo.path);
+          } catch (err) {
+            console.error("Error borrando archivo:", fileInfo.path, err);
+          }
+        })
+      );
+
+      
+      let archivosActuales = infoDataCurrently.archivosAdjuntos || [];
+
+      uploadedFiles.forEach(nuevo => {
+        const index = archivosActuales.findIndex(a => a.nombreCampo === nuevo.nombreCampo);
+        if (index !== -1) {
+          cambios.push({
+                      id: id_radicado,
+                      time,
+                      cambio: nuevo.nombreOriginal,
+                      antiguo: archivosActuales[index].nombreOriginal,
+                      paso: valorPasoDocumentos(nuevo.nombreCampo)
+                    });
+
+          archivosActuales[index] = nuevo;
+        
+
+        } else {
+          archivosActuales.push(nuevo);
+          cambios.push({
+                id: id_radicado,
+                time,
+                cambio: nuevo.nombreOriginal,
+                antiguo: "-",
+                paso: valorPasoDocumentos(nuevo.nombreCampo)
+              });
+        }
+      });
+
+
+
+    
+      await docRef.update({
+        archivosAdjuntos: archivosActuales,
+      
+      });
+
+      const historyRef = db.collection("history");
+
+      
+
+      cambios.forEach(async cambio =>{
+        await historyRef.add(cambio)
+      });
+
+      const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
+                  
+      const whoSend = [{correo:decoded.email},{correo:infoDataCurrently.aprovacionGD[0].email}]
+      const whoSendHeader = JSON.stringify(whoSend); 
+    
+      await axios.post(
+        n8nWebhookUrl,
+        cambios,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'API_KEY_N8N': process.env.SECRET_KEY_N8N,
+            'motivo':'Ajustes Completados',
+            'whoSend':whoSendHeader,
+            'id_radicado':id_radicado
           }
         }
-      });
-    });
-    updates["estadoAjustesPendientes"] = "Desactivado";
-    updates["estado"] = "Creado";
-
-    if(Object.keys(updates).length > 0){
+      );
     
-      await docRef.update(updates)
+
+      res.status(201).json({
+        success: true,
+        message: "Radicado actualizado correctamente",
+        archivosActuales,
+        cambios
+      });
+
+    } catch (err) {
+      console.error("ERROR EN UpdateRadicadoById:", err);
+      res.status(500).json({ success: false, message: "Error interno", error: err.message });
     }
-    
-
-    // ✅ Subida de archivos a Storage
-    const keys = Object.keys(filesData);
-    const uploadPromises = keys.map(async (key) => {
-      const fileInfo = filesData[key][0];
-      const destinationPath = `${id_radicado}/${fileInfo.fieldname}/${fileInfo.originalname}`;
-
-      const [file] = await bucket.upload(fileInfo.path, {
-        destination: destinationPath,
-        metadata: { contentType: fileInfo.mimetype },
-      });
-
-      const fileUrl = await file.getSignedUrl({
-        action: 'read',
-        expires: '03-09-2491',
-      });
-
-      return {
-        nombreOriginal: fileInfo.originalname,
-        nombreCampo: fileInfo.fieldname,
-        rutaBucket: file.name,
-        urlDescarga: fileUrl[0]
-      };
-    });
-
-    const uploadedFiles = await Promise.all(uploadPromises);
-
-    // ✅ Borrar archivos temporales
-    await Promise.all(
-      keys.map(async (key) => {
-        const fileInfo = filesData[key][0];
-        try {
-          await fs.promises.unlink(fileInfo.path);
-        } catch (err) {
-          console.error("Error borrando archivo:", fileInfo.path, err);
-        }
-      })
-    );
-
-    // ✅ Reemplazar/Agregar archivos en Firestore
-    let archivosActuales = infoDataCurrently.archivosAdjuntos || [];
-
-    uploadedFiles.forEach(nuevo => {
-      const index = archivosActuales.findIndex(a => a.nombreCampo === nuevo.nombreCampo);
-      if (index !== -1) {
-        cambios.push({
-                    id: id_radicado,
-                    time,
-                    cambio: nuevo.nombreOriginal,
-                    antiguo: archivosActuales[index].nombreOriginal,
-                    paso: valorPasoDocumentos(nuevo.nombreCampo)
-                  });
-
-        archivosActuales[index] = nuevo;
-       
-
-      } else {
-        archivosActuales.push(nuevo);
-        cambios.push({
-              id: id_radicado,
-              time,
-              cambio: nuevo.nombreOriginal,
-              antiguo: "-",
-              paso: valorPasoDocumentos(nuevo.nombreCampo)
-            });
-      }
-    });
-
-
-
-    // ✅ Actualizar Firestore
-    await docRef.update({
-      archivosAdjuntos: archivosActuales,
-      whoSendCompleteAjuste:''
-     
-    });
-
-    const draftRef = db.collection("history");
-
-    
-
-    cambios.forEach(async cambio =>{
-      console.log(cambio)
-      await draftRef.add(cambio)
-
-    });
-
-     const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
-                
-    const response = await axios.post(
-      n8nWebhookUrl,
-      cambios,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'API_KEY_N8N': process.env.SECRET_KEY_N8N,
-          'motivo':'AjustesComplete',
-          'whoSend':infoDataCurrently.aprovacionGD[0].gmailSender,
-          'id_radicado':id_radicado
-        }
-      }
-    );
-  
-
-    res.status(201).json({
-      success: true,
-      message: "Radicado actualizado correctamente",
-      archivosActuales,
-      cambios
-    });
-
-  } catch (err) {
-    console.error("ERROR EN UpdateRadicadoById:", err);
-    res.status(500).json({ success: false, message: "Error interno", error: err.message });
   }
-}
 
 
 
 };
+
 
 function valorPasoDocumentos(nombreCampo) {
   return pasoDocumentos[nombreCampo] || "Documento";
