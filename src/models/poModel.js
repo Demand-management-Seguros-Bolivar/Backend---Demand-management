@@ -11,15 +11,20 @@ const {model, fileManager } = require('../ia_model')
 
 
 const Book = {
- async getRadicadosByUser(req, res) {
+
+  async getRadicadosByUser(req, res) {
+
     const token = req.cookies.session;
+
     if (!token) {
+
         return res.status(401).json({ success: false, message: "No hay token de sesión" });
+
     }
 
     let decoded;
+
     try {
-        
         decoded = jwt.verify(token, process.env.SECRET_KEY); 
     } catch (err) {
         return res.status(401).json({ success: false, message: "Token inválido o expirado" });
@@ -38,7 +43,7 @@ const Book = {
         success: true,
         data: drafts 
     });
-},
+  },
   
 
   async getAnswerIa(req,res) {
@@ -132,24 +137,28 @@ const Book = {
 
   async getRadicadoByIdAjustes(req,res) {
 
-    //Looking for the draft with a specific id
+    
     const { id_draft} = req.body;
     
     const snapshot = await db.collection('draft').doc(id_draft ).get();
-    console.log(snapshot)
+    
 
-    if(snapshot.data().estadoAjustesPendientes === "Gerentes" || snapshot.data().estadoAjustesPendientes === "GD"){
+    if((snapshot.data().estadoAjustesPendientes === "Gerentes"  || snapshot.data().estadoAjustesPendientes === "Vicepresidentes") && snapshot.data().estado === "Pendiente de ajustes"){
+
       return res.json(snapshot);
+
     }else{
+
       return res.status(401).json({ success: false, message: "No se tiene permido para edicion de este radicado" });
+
     }
     
   },
 
+
   async getRadicadoByIdDetails(req, res) {
     
     const  data  = req.body; 
-    console.log(req.body)
 
     
     const token = req.cookies.session;
@@ -159,27 +168,24 @@ const Book = {
     }
 
     let decoded;
+
     try {
         decoded = jwt.verify(token, process.env.SECRET_KEY);
     } catch (err) {
         return res.status(401).json({ success: false, message: "Token inválido o expirado" });
     }
-    // ------------------------------------
-
-    // 2. Lógica de Base de Datos con Try/Catch
+    
     try {
-        console.log(req.body)
         
-        // C. Acceder directamente al documento
         const snapshot = await db.collection('draft').doc(data.id_draft).get();
         const snapshot2 = await db.collection('history').where("id","==",data.id_draft).get();
         
-        // Verificar si el documento existe
+        
         if (!snapshot.exists) {
             return res.status(404).json({ success: false, message: "Borrador no encontrado" });
         }
         
-        // 3. Verificación de Autorización (¡La parte clave de la seguridad!)
+        
         const draftData = snapshot.data();
         const historyChangesData = snapshot2.docs.map(doc => doc.data());
 
@@ -189,19 +195,23 @@ const Book = {
         //}
 
         if(decoded.role === "PO"){
+
           if(draftData.correo !== decoded.email){
+
              return res.status(403).json({ success: false, message: "Acceso denegado. No tienes permisos para ver este borrador." });
+          
           }else{
+
              draftData["id"] = snapshot.id;
-              // 4. Respuesta de éxito
+             
               return res.status(200).json({
                   success: true,
                   id: snapshot.id,
                   data: draftData,
                   history: historyChangesData
               });
-
           }
+
         }else{
 
           draftData["id"] = snapshot.id;
@@ -222,6 +232,7 @@ const Book = {
         return res.status(500).json({ success: false, message: "Error interno del servidor al buscar el borrador." });
     }
   },
+
 
   async createDraft(req, res) {
     try {
@@ -282,9 +293,9 @@ const Book = {
             estado: "Radicado",
             estadoAjustesPendientes: "Desactivado",
             archivosAdjuntos: [],
-            aprovacionGD: [],
-            aprovacionGerentes: [],
-            aprovacionVices: [],
+            aprobacionGD: [],
+            aprobacionGerentes: [],
+            aprobacionVices: [],
             comentarios: [],
             createdAt: new Date()
         };
@@ -467,8 +478,8 @@ const Book = {
         if(infoDataCurrently.estadoAjustesPendientes == "Gerentes"){
           updates.estado = "En revision";
 
-          const gerentes = Array.isArray(infoDataCurrently.aprovacionGerentes)
-          ? [... infoDataCurrently.aprovacionGerentes]
+          const gerentes = Array.isArray(infoDataCurrently.aprobacionGerentes)
+          ? [... infoDataCurrently.aprobacionGerentes]
           : [];
 
           gerentes.forEach( gerente =>{
@@ -477,10 +488,26 @@ const Book = {
               gerente.estado = "En revision"
           });
 
-          updates.aprovacionGerentes = gerentes;
+          updates.aprobacionGerentes = gerentes;
+
+        }else if ((infoDataCurrently.estadoAjustesPendientes == "Vicepresidentes")){
+         
+          updates.estado = "En revision";
+
+          const vicepresidentes = Array.isArray(infoDataCurrently.aprobacionVices)
+          ? [... infoDataCurrently.aprobacionVices]
+          : [];
+
+          vicepresidentes.forEach( vicepresidente =>{
+              
+            if(vicepresidente.estado === "Pendiente de ajustes")
+              vicepresidente.estado = "En revision"
+          });
+
+          updates.aprobacionVices = vicepresidentes;
 
         }else{
-          updates.estado = "Creado";
+          updates.estado = "Radicado";
         }
       
         await docRef.update(updates)
@@ -571,8 +598,20 @@ const Book = {
       });
 
       const n8nWebhookUrl = 'https://segurobolivar-trial.app.n8n.cloud/webhook/bde93e34-e7c6-4e5f-b7ff-c59cbb7363b0';
-                  
-      const whoSend = [{correo:decoded.email},{correo:infoDataCurrently.aprovacionGD[0].email}]
+      
+      let whoSend = []
+
+       if(infoDataCurrently.estadoAjustesPendientes == "Gerentes"){
+         whoSend = [{correo:decoded.email},{correo:infoDataCurrently.aprobacionGD[0].email},...infoDataCurrently.aprobacionGerentes]
+
+       }else if (infoDataCurrently.estadoAjustesPendientes == "vicepresidentes"){
+        whoSend = [{correo:decoded.email},{correo:infoDataCurrently.aprobacionGD[0].email},...infoDataCurrently.aprobacionVices]
+
+       }else{
+         whoSend = [{correo:decoded.email},{correo:infoDataCurrently.aprobacionGD[0].email}]
+
+       }
+
       const whoSendHeader = JSON.stringify(whoSend); 
     
       await axios.post(
@@ -602,8 +641,6 @@ const Book = {
       res.status(500).json({ success: false, message: "Error interno", error: err.message });
     }
   }
-
-
 
 };
 

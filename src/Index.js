@@ -2,6 +2,7 @@ const express = require("express");
 const poRoutes = require("./routes/poRoutes");
 const loginRoutes = require("./routes/loginRoutes");
 const methodsRoutes = require("./routes/methodsRoutes");
+const vicepresidenteRoutes = require("./routes/vicepresidenteRoutes");
 const morgan = require("morgan");
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
@@ -26,5 +27,6 @@ app.use(cors({
 app.use("/api", poRoutes);
 app.use("/api", loginRoutes);
 app.use("/api", methodsRoutes);
+app.use("/api", vicepresidenteRoutes);
 
 module.exports = app;

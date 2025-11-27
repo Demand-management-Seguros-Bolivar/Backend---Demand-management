@@ -38,4 +38,33 @@ const createRequestAdjustments = async (req,res)=>{
 
 };
 
-module.exports = {getAllDrafts, createRequestAdjustments, updateStatusDraftAcept}
+const passItOnVicepresidente = async (req,res) => {
+
+  try{
+        await methodsService. passItOnVicepresidente(req,res);
+         
+
+    }catch(err){
+         res.status(500).json({ error: "Error al obtener los radicados" });
+
+    }
+
+};
+
+
+
+
+const updateStatusDraftAceptComplete = async (req,res) => {
+
+  try{
+        await methodsService. updateStatusDraftAceptComplete(req,res);
+         
+
+    }catch(err){
+         res.status(500).json({ error: "Error al obtener los radicados" });
+
+    }
+
+};
+
+module.exports = {getAllDrafts, createRequestAdjustments, updateStatusDraftAcept, updateStatusDraftAceptComplete, passItOnVicepresidente}
